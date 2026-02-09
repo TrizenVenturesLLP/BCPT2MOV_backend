@@ -43,18 +43,26 @@ app = FastAPI()
 # Get frontend URL from env or default to deployed frontend
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://bcpt2mov-frontend.llp.trizenventures.com")
 
+# More permissive CORS for debugging - allow all origins temporarily
+# In production, restrict to specific domains
+CORS_ORIGINS = [
+    FRONTEND_URL,
+    "https://bcpt2mov-frontend.llp.trizenventures.com",  # Explicit
+    "http://bcpt2mov-frontend.llp.trizenventures.com",  # HTTP fallback
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "*",  # Temporary: allow all for debugging
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL,
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative dev port
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_origins=["*"],  # Temporarily allow all to test if origin matching is the issue
+    allow_credentials=False,  # Set to False when using wildcard
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,
 )
 
 MODEL_DIR = 'models'
@@ -173,6 +181,15 @@ class OrderStatusUpdate(BaseModel):
 @app.get("/")
 def read_root():
     return {"message": "Agri Predict API is running"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint with CORS headers"""
+    return {
+        "status": "ok",
+        "cors_enabled": True,
+        "frontend_url": FRONTEND_URL
+    }
 
 @app.post("/predict_price")
 def predict_price(req: PricePredictRequest):
