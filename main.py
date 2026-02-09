@@ -1,11 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
-# ... (imports remain)
-
-
+# --- Standard Library & Third‑Party Imports ---
+import logging
 import pandas as pd
 import joblib
 import os
@@ -17,6 +16,15 @@ import models
 import sqlite3
 import os
 
+# --- Logging Configuration ---
+
+# Basic logging setup – Uvicorn will pick this up and stream to container logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("agri_backend")
+
 # Create tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -24,18 +32,19 @@ models.Base.metadata.create_all(bind=engine)
 DB_PATH = 'agri_insights.db'
 if os.path.exists(DB_PATH):
     try:
+        logger.info("Running DB migration checks...")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(products)")
         columns = [column[1] for column in cursor.fetchall()]
         if 'transport_cost' not in columns:
-            print("Running migration: Adding transport_cost column...")
+            logger.info("Running migration: Adding transport_cost column...")
             cursor.execute("ALTER TABLE products ADD COLUMN transport_cost REAL")
             conn.commit()
-            print("✓ Migration successful!")
+            logger.info("✓ Migration successful!")
         conn.close()
     except Exception as e:
-        print(f"Migration warning: {e}")
+        logger.warning(f"Migration warning: {e}")
 
 app = FastAPI()
 
@@ -43,27 +52,39 @@ app = FastAPI()
 # Get frontend URL from env or default to deployed frontend
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://bcpt2mov-frontend.llp.trizenventures.com")
 
-# More permissive CORS for debugging - allow all origins temporarily
-# In production, restrict to specific domains
-CORS_ORIGINS = [
-    FRONTEND_URL,
-    "https://bcpt2mov-frontend.llp.trizenventures.com",  # Explicit
-    "http://bcpt2mov-frontend.llp.trizenventures.com",  # HTTP fallback
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "*",  # Temporary: allow all for debugging
-]
+# NOTE: for now we allow all origins (no credentials) to simplify production debugging.
+# Once everything is stable, tighten this to [FRONTEND_URL] and set allow_credentials=True.
+logger.info(f"Configuring CORS. FRONTEND_URL={FRONTEND_URL}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Temporarily allow all to test if origin matching is the issue
-    allow_credentials=False,  # Set to False when using wildcard
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=3600,
 )
+
+# --- Request Logging Middleware ---
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """
+    Log every incoming request and its response status.
+    These logs will appear in:
+      - local terminal when you run `python main.py`
+      - CapRover / Docker logs in production
+    """
+    logger.info(f"➡️  {request.method} {request.url} from {request.client.host}")
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled exception while processing request")
+        raise
+
+    logger.info(f"⬅️  {request.method} {request.url.path} -> {response.status_code}")
+    return response
 
 MODEL_DIR = 'models'
 PRICE_MODEL_PATH = os.path.join(MODEL_DIR, 'price_model.pkl')
