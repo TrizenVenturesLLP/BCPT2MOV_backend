@@ -40,12 +40,21 @@ if os.path.exists(DB_PATH):
 app = FastAPI()
 
 # --- CORS Configuration ---
+# Get frontend URL from env or default to deployed frontend
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://bcpt2mov-frontend.llp.trizenventures.com")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development, allow all. In production, specify the frontend URL.
+    allow_origins=[
+        FRONTEND_URL,
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative dev port
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 MODEL_DIR = 'models'
