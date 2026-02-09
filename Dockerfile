@@ -19,6 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend source code
 COPY . .
 
+# Cache bust: Add build timestamp to force rebuild when code changes
+ARG BUILD_DATE=unknown
+ENV BUILD_DATE=${BUILD_DATE}
+
 # Expose FastAPI port
 ENV PORT=8000
 EXPOSE 8000
