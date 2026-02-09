@@ -1,0 +1,1 @@
+date,commodity_group,crop_type,state_name,market_location,total_quantity_sold,avg_price_per_kg,historical_demand_7d,price_trend_7d,estimated_production_kg,policy_support_score,festival_flag,season,weather_index,demand_level,demand_category
